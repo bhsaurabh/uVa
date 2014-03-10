@@ -109,6 +109,7 @@ public class Main implements Runnable {
             machine.run();
             // separae outputs
             if (i != cases-1)   System.out.println();
+            sc.nextLine();  // as we have a free space, and hasNextInt() will fail
         }
     }
 }
