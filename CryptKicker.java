@@ -3,24 +3,27 @@ import java.util.*;
 public class Main implements Runnable {
 	private Scanner sc;
 
+    /* Custom comparator to reverse-sort strings based on length */
+    private class ReverseStringComparator implements Comparator<String> {
+        public int compare(String s1, String s2) {
+            return (s1.length() - s2.length()) * (-1);
+        }
+    }
+
 	private class Crypt implements Runnable {
 		private int N;	// number of words in dictionary
 		private String[] dict;	// dictionary of legible words
 		private String[] input;	// encrypted text
 		private Hashtable<Character, Character> substitution;	// characer substitution dictionary <encryped:decrypted>
-
-		/* Custom comparator to reverse-sort strings based on length */
-		private class ReverseStringComparator implements Comparator<String> {
-			public int compare(String s1, String s2) {
-				return (s1.length() - s2.length()) * (-1);
-			}
-		}
+        private Hashtable<String, String> answer;   // stores decrypted words
+    
 
 		/* Constructor */
 		public Crypt(int N) {
 			this.N = N;
 			this.dict = new String[N];
             this.substitution = new Hashtable<Character, Character>();
+            this.answer = null;
 		}
 
 		/* Read words from STDIN into dicionary */
@@ -40,7 +43,6 @@ public class Main implements Runnable {
 		/* Read Encrypted text */
 		private void getInput() {
 			String inputText = sc.nextLine();
-            System.out.println("DEBUG: Your Input is = " + inputText);
             char[] chars = inputText.toCharArray();
             for (char c : chars)
 				substitution.put(c, '\u0000');
@@ -60,22 +62,25 @@ public class Main implements Runnable {
             // if all words are completed return true
             boolean result = true;
             for (String str : completed.keySet()) {
-                System.out.println("\t\t\t\t" + str + " -> " + completed.get(str));
                 boolean temp = false;
                 if (completed.get(str) != "") temp = true;
                 result &= temp;
             }
-            if (result) return true;
+            if (result){
+                if (this.answer == null)    this.answer = completed;
+                return true;
+            }
 
             String word = input[wordPos];
 
             // check if this word is already considered
             if (completed.get(word) != "") {
-                System.out.println("\tDEBUG: Already compared this word < " + word + " >");
-                recurse(wordPos+1, s, completed);
+                result = recurse(wordPos+1, s, completed);
+                if (result) {
+                    return true;
+                }
             }
 
-            System.out.println("DEBUG:" +  word);
             // get list of dictionary words that are possibly this word
             ArrayList<String> possibleWords = new ArrayList<String>();
             int len = word.length();    // avoid recomputations
@@ -83,6 +88,11 @@ public class Main implements Runnable {
                 if (w.length() == len)  possibleWords.add(w);
             // Transform word as per subs hashtable
             char[] wordChars = word.toCharArray();
+            char[] wordCopy = new char[wordChars.length];
+            // copy
+            for (int i = 0; i < wordChars.length; i++)
+                wordCopy[i] = wordChars[i];
+
             boolean[] transformedChars = new boolean[wordChars.length]; // keeps track of which positions were transformed
             // TODO: Use bit-vectors for representing above
             for (int i = 0; i < wordChars.length; i++) {
@@ -95,11 +105,9 @@ public class Main implements Runnable {
             }
             // now compare to each dictionary word. Add more mappings and recurse
             for (String w : possibleWords) {
-                System.out.println("\tDEBUG: Comparing " + word + " with " + w);
                 boolean considered = false;
                 for (String str : completed.values())
                     if (w == str) {
-                        System.out.println("\t\tDEBUG: Already considered");
                         considered = true;
                         break;
                     }
@@ -112,15 +120,12 @@ public class Main implements Runnable {
                         char dictChar = w.charAt(i);    // character in dictionary word
                         if (dictChar != wordChars[i]) {
                             // useless word
-                            System.out.println("\t\tDEBUG: Defintely not");
-                            for (char c : s.keySet())
-                                System.out.println("\t\t\t\t" + c + " --> " + s.get(c));
                             useless = true;
                             break;
                         }
                     }
                 if (useless)    continue;
-                System.out.println("\t\tDEBUG: Could be a valid substitution");
+                
                 // create a extra hashset to have this done and pass along
                 Hashtable<String, String> extraCompleted = new Hashtable<String, String>();
                 //TODO: Better way of copying hashtables
@@ -133,39 +138,35 @@ public class Main implements Runnable {
                 // add existing keys from s into subs
                 for (char key : s.keySet()) subs.put(key, s.get(key));
                 // add new mappings too!
-                for (int i = 0; i < w.length(); i++)
-                    subs.put(wordChars[i], w.charAt(i));
+                for (int i = 0; i < w.length(); i++) {
+                    subs.put(wordCopy[i], w.charAt(i));
+                }
 
                 // recurse!
-                // TODO: add a stopping condition
                 result = recurse(wordPos+1, subs, extraCompleted);
-                if (result) return result;    
+                if (result) {
+                    return true;
+                }
             }
-            // TODO: Change this
             return false;
         }
 
 		/* Abstract method to be overriddent */
 		public void run() {
             getDictionary();
-            //DEBUG: showDictionary();
             while (sc.hasNext())
                 getInput();
-            //System.out.println("DEBUG: " + input);
 			// sort the input based on length
-			/*Arrays.sort(input, new ReverseStringComparator());
-            System.out.print("DEBUG: ");
-            for (int i = 0; i < input.length; i++)
-                System.out.print(input[i]);*/
-            // take the 1st element (presumably largest) and compare it with dictionary
-
+			Arrays.sort(input, new ReverseStringComparator());
+            
             // create a new hashtable having keys as encrypted words and storing if they are decrypted
             Hashtable<String, String> completed = new Hashtable<String, String>();
             for (String s : input)
                 completed.put(s, "");
             boolean result = recurse(0, substitution, completed);// give position of largest word (0 for us as it is reverse-sorted)
-            System.out.println(result);
-		}
+		    for (String s : this.answer.keySet())
+                System.out.println(s + " -> " + this.answer.get(s));
+        }
 	}
 
 	public Main() {
